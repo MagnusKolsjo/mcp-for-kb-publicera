@@ -42,7 +42,7 @@ DDK-avdelningarna beskrivs i tabellen nedan och i [Dewey decimalklassifikation �
 
 ## Tidskrifter
 
-53 av 55 tidskrifter på KB Publicera finns representerade nedan. Undantagen är *Sömn och Hälsa* (saknas i Libris) och *Publicera Support* (intern resurssida). DDK-avdelning hämtas från Libris; tre tidskrifter saknar officiell DDC-klassning och har tilldelats avdelning manuellt (markerade med *).
+53 av 55 tidskrifter på KB Publicera finns representerade nedan. Undantagen är *Sömn och Hälsa* (saknas i Libris) och *Publicera Support* (intern resurssida). DDK-avdelning hämtas från Libris; tre tidskrifter saknar officiell DDK-klassning och har tilldelats avdelning manuellt (markerade med *).
 
 | Tidskrift | ISSN | DDK-avdelning |
 |---|---|---|
@@ -100,6 +100,6 @@ DDK-avdelningarna beskrivs i tabellen nedan och i [Dewey decimalklassifikation �
 | Tidskrift för litteraturvetenskap | 0346-6469 | 800 Litteratur, retorik & analys * |
 | Utbildning och Lärande | 2001-4554 | 300 Samhällsvetenskaper, sociologi & antropologi |
 
-\* Avdelning tilldelad manuellt — tidskriften saknar DDC-klassning i Libris.
+\* Avdelning tilldelad manuellt — tidskriften saknar DDK-klassning i Libris.
 
 DDK-avdelningarna följer Dewey decimalklassifikation (DDK 23), som Kungliga biblioteket tillämpar sedan 2011. En fullständig översikt finns i [Dewey decimalklassifikation — översikt (KB, 2023)](https://metadatabyran.kb.se/download/18.44613d3618ee55a56596c26/1716212730072/dewey_oversikt_23.pdf).
