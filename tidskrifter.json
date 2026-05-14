@@ -1,0 +1,387 @@
+[
+  {
+    "spec": "al",
+    "namn": "Acta Logopaedica",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "adoranten",
+    "namn": "Adoranten",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "aejpr",
+    "namn": "AGATHEOS – European Journal for Philosophy of Religion",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "aoh",
+    "namn": "Arbete och Hälsa",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "arv",
+    "namn": "Arv",
+    "relevans": 2,
+    "amnesomrade": "Folkloristik / kulturhistoria",
+    "antal_poster": null
+  },
+  {
+    "spec": "asla",
+    "namn": "ASLA:s skriftserie",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "cia",
+    "namn": "Childhood in the Anthropocene",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "ciwil",
+    "namn": "Current Issues in Work-Integrated Learning",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "csa",
+    "namn": "Current Swedish Archaeology",
+    "relevans": 2,
+    "amnesomrade": "Arkeologi",
+    "antal_poster": null
+  },
+  {
+    "spec": "educare",
+    "namn": "Educare",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "ethsc",
+    "namn": "Ethnologia Scandinavica",
+    "relevans": 2,
+    "amnesomrade": "Etnologi",
+    "antal_poster": null
+  },
+  {
+    "spec": "ejels",
+    "namn": "European Journal of Empirical Legal Studies",
+    "relevans": 1,
+    "amnesomrade": "Rättsvetenskap (empirisk juridik)",
+    "antal_poster": null
+  },
+  {
+    "spec": "ejpae",
+    "namn": "European Journal of Philosophy in Arts Education",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "forskul",
+    "namn": "Forskning om undervisning och lärande",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "fornvannen",
+    "namn": "Fornvännen",
+    "relevans": 2,
+    "amnesomrade": "Arkeologi / kulturhistoria",
+    "antal_poster": null
+  },
+  {
+    "spec": "fn",
+    "namn": "Forum navale",
+    "relevans": 2,
+    "amnesomrade": "Marinhistoria",
+    "antal_poster": null
+  },
+  {
+    "spec": "hyb",
+    "namn": "HYBRID – mellan akademi, kyrka & samhälle",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "hpdebatt",
+    "namn": "Högskolepedagogisk debatt",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "ihs",
+    "namn": "Idrott, historia och samhälle",
+    "relevans": 1,
+    "amnesomrade": "Historia & samhälle",
+    "antal_poster": null
+  },
+  {
+    "spec": "ir",
+    "namn": "Information Research",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "insi",
+    "namn": "In Situ Archaeologica",
+    "relevans": 2,
+    "amnesomrade": "Arkeologi",
+    "antal_poster": null
+  },
+  {
+    "spec": "jdsr",
+    "namn": "Journal of Digital Social Research",
+    "relevans": 1,
+    "amnesomrade": "Digital samhällsvetenskap",
+    "antal_poster": null
+  },
+  {
+    "spec": "jevtm",
+    "namn": "Journal of Endovascular Resuscitation and Trauma Management",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "jonas",
+    "namn": "Journal of Nordic Archaeological Science – JONAS",
+    "relevans": 2,
+    "amnesomrade": "Nordisk arkeologi",
+    "antal_poster": null
+  },
+  {
+    "spec": "jphe",
+    "namn": "Journal of Praxis in Higher Education",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "kapet",
+    "namn": "Kapet",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "kp",
+    "namn": "Kulturella Perspektiv – Svensk etnologisk tidskrift",
+    "relevans": 2,
+    "amnesomrade": "Etnologi",
+    "antal_poster": null
+  },
+  {
+    "spec": "lambdanordica",
+    "namn": "lambda nordica",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "meta",
+    "namn": "META – Historiskarkeologisk tidskrift",
+    "relevans": 2,
+    "amnesomrade": "Historisk arkeologi",
+    "antal_poster": null
+  },
+  {
+    "spec": "mosp",
+    "namn": "Moderna Språk",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "nob",
+    "namn": "Namn och bygd",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "njes",
+    "namn": "Nordic Journal of English Studies",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "noad",
+    "namn": "Nordisk Tidskrift för Allmän Didaktik",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "noso",
+    "namn": "Nordisk tidskrift för socioonomastik",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "opuscula",
+    "namn": "Opuscula. Annual of the Swedish Institutes at Athens and Rome",
+    "relevans": 2,
+    "amnesomrade": "Antikvetenskap",
+    "antal_poster": null
+  },
+  {
+    "spec": "pfs",
+    "namn": "Pedagogisk forskning i Sverige",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "puls",
+    "namn": "Puls – musik- och dansetnologisk tidskrift",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "rig",
+    "namn": "Rig. Kulturhistorisk tidskrift",
+    "relevans": 2,
+    "amnesomrade": "Kulturhistoria",
+    "antal_poster": null
+  },
+  {
+    "spec": "samlaren",
+    "namn": "Samlaren",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "sjpa",
+    "namn": "Scandinavian Journal of Public Administration",
+    "relevans": 1,
+    "amnesomrade": "Förvaltningsrätt / statsvetenskap",
+    "antal_poster": null
+  },
+  {
+    "spec": "scis",
+    "namn": "Scripta Islandica",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "shs",
+    "namn": "Släkthistoriska Studier",
+    "relevans": 2,
+    "amnesomrade": "Genealogi / historia",
+    "antal_poster": null
+  },
+  {
+    "spec": "slr",
+    "namn": "Snow Leopard Reports",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "smt",
+    "namn": "Socialmedicinsk tidskrift",
+    "relevans": 2,
+    "amnesomrade": "Socialmedicin",
+    "antal_poster": null
+  },
+  {
+    "spec": "socvet",
+    "namn": "Socialvetenskaplig tidskrift",
+    "relevans": 1,
+    "amnesomrade": "Samhällsvetenskap",
+    "antal_poster": null
+  },
+  {
+    "spec": "sos",
+    "namn": "Språk och stil",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "siplr",
+    "namn": "Stockholm Intellectual Property Law Review",
+    "relevans": 1,
+    "amnesomrade": "Juridik (immaterialrätt)",
+    "antal_poster": null
+  },
+  {
+    "spec": "sea",
+    "namn": "Svensk Exegetisk Årsbok",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "stm-sjm",
+    "namn": "Svensk tidskrift för musikforskning / Swedish Journal of Music Research",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "svlm",
+    "namn": "Svenska landsmål och svenskt folkliv",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "soh",
+    "namn": "Sömn och Hälsa",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "tgv",
+    "namn": "Tidskrift för genusvetenskap",
+    "relevans": 2,
+    "amnesomrade": "Genusvetenskap",
+    "antal_poster": null
+  },
+  {
+    "spec": "tfl",
+    "namn": "Tidskrift för litteraturvetenskap",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "ul",
+    "namn": "Utbildning & Lärande",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  },
+  {
+    "spec": "ps",
+    "namn": "Publicera Support",
+    "relevans": 3,
+    "amnesomrade": "",
+    "antal_poster": null
+  }
+]

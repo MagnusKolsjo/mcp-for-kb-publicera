@@ -1,0 +1,13 @@
+# KB Publicera MCP-server — beroenden
+
+# MCP-protokoll (Claude Desktop-integration)
+mcp>=1.0.0
+
+# PostgreSQL
+psycopg2-binary>=2.9
+
+# Miljövariabler
+python-dotenv>=1.0
+
+# PDF-textextraktion (fallback när XML/HTML/EPUB saknas)
+pdfplumber>=0.10
