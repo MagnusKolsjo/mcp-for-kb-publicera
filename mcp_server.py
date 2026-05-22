@@ -23,6 +23,7 @@ import time
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 
@@ -192,6 +193,13 @@ def expandera_fraga(query: str) -> list[str]:
 
 
 def ensure_schema(conn) -> None:
+    """
+    Skapar och migrerar databasens schema.
+
+    Bas-schemat (v1.0.0) ändras inte efter publicering.
+    Alla schemaändringar görs som tydliga migration-block.
+    """
+    # === Bas-schema (v1.0.0 — ändra inte efter publicering) ==================
     with _cursor(conn) as cur:
         if _ar_postgres():
             cur.execute("CREATE SCHEMA IF NOT EXISTS publicera_kb")
@@ -232,16 +240,12 @@ def ensure_schema(conn) -> None:
                 )
             """)
             cur.execute("""
-                ALTER TABLE publicera_kb.artikel
-                    ADD COLUMN IF NOT EXISTS fts_tsv TSVECTOR
-            """)
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS artikel_fts_idx
-                    ON publicera_kb.artikel USING GIN (fts_tsv)
-            """)
-            cur.execute("""
                 CREATE INDEX IF NOT EXISTS artikel_spec_idx
                     ON publicera_kb.artikel (spec)
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS artikel_sprak_idx
+                    ON publicera_kb.artikel (sprak)
             """)
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS artikel_publicerad_idx
@@ -310,6 +314,39 @@ def ensure_schema(conn) -> None:
             """)
     conn.commit()
 
+    # === Migrationer after publication ========================================
+    # M1: Konvertera fts_tsv till generated column med 'simple' (v2.0.0, 2026-05-22)
+    #     Blandspråkig korpus (sv + en) — 'simple' ger korrekt matchning utan stemming.
+    #     Generated column underhålls automatiskt av PostgreSQL vid upsert;
+    #     synk-skriptet behöver inte längre uppdatera fts_tsv manuellt.
+    if _ar_postgres():
+        with _cursor(conn) as cur:
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_schema = 'publicera_kb'
+                          AND table_name   = 'artikel'
+                          AND column_name  = 'fts_tsv'
+                          AND is_generated = 'ALWAYS'
+                    ) THEN
+                        ALTER TABLE publicera_kb.artikel DROP COLUMN IF EXISTS fts_tsv;
+                        ALTER TABLE publicera_kb.artikel
+                            ADD COLUMN fts_tsv TSVECTOR
+                            GENERATED ALWAYS AS (
+                                to_tsvector('simple'::regconfig,
+                                    coalesce(titel,'') || ' ' || coalesce(abstrakt,''))
+                            ) STORED;
+                    END IF;
+                END$$
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS artikel_fts_idx
+                    ON publicera_kb.artikel USING GIN (fts_tsv)
+            """)
+        conn.commit()
+
 
 # ---------------------------------------------------------------------------
 # OAI-PMH hjälpare
@@ -326,11 +363,26 @@ def _falt(meta, tag: str) -> list[str]:
 
 
 def _tolka_post(record) -> dict | None:
+    """
+    Tolkar ett OAI-PMH record-element till en dict redo för spara_artikel().
+
+    DC-format på Publicera:
+    - dc:identifier  → artikel-URL ELLER DOI (två separata element)
+    - dc:relation    → PDF-URL
+    - dc:source      → tidskriftsnamn+volym/nummer ELLER ISSN (flera element)
+    - dc:subject     → ämnesord (flera element)
+    - dc:creator     → författare (flera element)
+    - dc:date        → publiceringsdatum (YYYY-MM-DD eller YYYY)
+    - dc:rights      → licens-URL (Creative Commons eller liknande)
+    - dc:publisher   → tidskriftens namn
+    - header/datestamp → OAI-PMH-tidsstämpel för posten
+    """
     header = record.find(f"{{{NS_OAI}}}header")
     if header is None or header.get("status") == "deleted":
         return None
 
-    oai_id = _text(header, "identifier")
+    oai_id    = _text(header, "identifier")
+    datestamp = _text(header, "datestamp")
     set_specs = [
         s.text for s in header.findall(f"{{{NS_OAI}}}setSpec")
         if s.text and ":" not in s.text
@@ -341,38 +393,82 @@ def _tolka_post(record) -> dict | None:
     if meta is None:
         return None
 
+    # dc:identifier — skilja artikel-URL från DOI
     identifiers = _falt(meta, "identifier")
-    datum_lista = _falt(meta, "date")
-    beskrivningar = _falt(meta, "description")
+    artikel_url = next(
+        (u for u in identifiers if u.startswith("http") and "/article/view/" in u and u.count("/") > 5),
+        next((u for u in identifiers if u.startswith("http")), None),
+    )
+    doi = next(
+        (u for u in identifiers if u.startswith("10.") or "/doi/" in u or "doi.org" in u),
+        None,
+    )
 
-    url = next((i for i in identifiers if i.startswith("http")), None)
-    doi = next((i for i in identifiers if i.startswith("10.")), None)
+    # dc:relation → PDF-URL
+    relationer = _falt(meta, "relation")
+    pdf_url = next(
+        (r for r in relationer if r.startswith("http") and "/article/view/" in r),
+        None,
+    )
 
-    # Datum: föredra YYYY-MM-DD, acceptera YYYY
+    # dc:source → ISSN (9 tecken, siffror+bindestreck) och volym/nummer (övriga)
+    kallor = _falt(meta, "source")
+    issn = next(
+        (k for k in kallor if k.replace("-", "").isdigit() and len(k) == 9),
+        None,
+    )
+    volym_nummer = next(
+        (k for k in kallor if not k.replace("-", "").isdigit()),
+        None,
+    )
+
+    # dc:date → publiceringsdatum
+    datum_str = next(iter(_falt(meta, "date")), "")
     publicerad = None
-    for d in datum_lista:
-        m = re.match(r"(\d{4}-\d{2}-\d{2})", d)
-        if m:
-            publicerad = m.group(1)
-            break
-        m2 = re.match(r"(\d{4})", d)
-        if m2:
-            publicerad = f"{m2.group(1)}-01-01"
-            break
+    if datum_str:
+        for fmt, lgt in (("%Y-%m-%d", 10), ("%Y-%m", 7), ("%Y", 4)):
+            try:
+                dt = datetime.strptime(datum_str[:lgt], fmt)
+                publicerad = dt.date().isoformat()
+                break
+            except ValueError:
+                continue
 
-    titlar = _falt(meta, "title")
+    # header/datestamp → timestamptz (None om ogiltigt format)
+    ts = None
+    if datestamp:
+        try:
+            ts = datetime.fromisoformat(datestamp.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+
+    # dc:rights → licens-URL (föredra Creative Commons-URL)
+    rattigheter = _falt(meta, "rights")
+    licens = next(
+        (r for r in rattigheter if "creativecommons" in r or r.startswith("http")),
+        next(iter(rattigheter), None),
+    )
+
+    beskrivningar = _falt(meta, "description")
+    titlar        = _falt(meta, "title")
 
     return {
-        "oai_id":      oai_id,
-        "spec":        spec,
-        "titel":       titlar[0] if titlar else None,
-        "forfattare":  _falt(meta, "creator"),
-        "publicerad":  publicerad,
-        "abstrakt":    beskrivningar[0] if beskrivningar else None,
-        "sprak":       (_falt(meta, "language") or [None])[0],
-        "doi":         doi,
-        "artikel_url": url,
-        "amnesord":    _falt(meta, "subject"),
+        "oai_id":         oai_id,
+        "spec":           spec,
+        "artikel_url":    artikel_url,
+        "doi":            doi,
+        "pdf_url":        pdf_url,
+        "titel":          titlar[0] if titlar else None,
+        "forfattare":     _falt(meta, "creator"),
+        "amnesord":       _falt(meta, "subject"),
+        "abstrakt":       beskrivningar[0] if beskrivningar else None,
+        "publicerad":     publicerad,
+        "tidskrift_namn": next(iter(_falt(meta, "publisher")), None),
+        "volym_nummer":   volym_nummer,
+        "issn":           issn,
+        "sprak":          next(iter(_falt(meta, "language")), None),
+        "licens":         licens,
+        "datestamp":      ts,
     }
 
 
@@ -398,7 +494,7 @@ def hamta_artikel_fran_oai(spec: str, oai_id: str) -> dict | None:
 def _http_get(url: str) -> bytes | None:
     try:
         req = urllib.request.Request(
-            url, headers={"User-Agent": "KB-Publicera-MCP/1.0"}
+            url, headers={"User-Agent": "mcp-for-kb-publicera/1.0 (+https://github.com/MagnusKolsjo/mcp-for-kb-publicera)"}
         )
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
             return resp.read()
@@ -409,7 +505,7 @@ def _http_get(url: str) -> bytes | None:
 def _http_head_content_type(url: str) -> str | None:
     try:
         req = urllib.request.Request(
-            url, method="HEAD", headers={"User-Agent": "KB-Publicera-MCP/1.0"}
+            url, method="HEAD", headers={"User-Agent": "mcp-for-kb-publicera/1.0 (+https://github.com/MagnusKolsjo/mcp-for-kb-publicera)"}
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             ct = resp.headers.get("Content-Type", "")
@@ -564,42 +660,62 @@ def spara_artikel(conn, artikel: dict) -> None:
         with _cursor(conn) as cur:
             cur.execute("""
                 INSERT INTO publicera_kb.artikel
-                    (oai_id, spec, artikel_url, doi, titel, forfattare,
-                     amnesord, abstrakt, publicerad, sprak, indexerad)
+                    (oai_id, spec, artikel_url, doi, pdf_url,
+                     titel, forfattare, amnesord, abstrakt,
+                     publicerad, tidskrift_namn, volym_nummer, issn,
+                     sprak, licens, datestamp, indexerad)
                 VALUES
-                    (%(oai_id)s, %(spec)s, %(artikel_url)s, %(doi)s, %(titel)s,
-                     %(forfattare)s, %(amnesord)s, %(abstrakt)s, %(publicerad)s,
-                     %(sprak)s, NOW())
+                    (%(oai_id)s, %(spec)s, %(artikel_url)s, %(doi)s, %(pdf_url)s,
+                     %(titel)s, %(forfattare)s, %(amnesord)s, %(abstrakt)s,
+                     %(publicerad)s, %(tidskrift_namn)s, %(volym_nummer)s, %(issn)s,
+                     %(sprak)s, %(licens)s, %(datestamp)s, NOW())
                 ON CONFLICT (oai_id) DO UPDATE SET
-                    artikel_url = EXCLUDED.artikel_url,
-                    doi         = EXCLUDED.doi,
-                    titel       = EXCLUDED.titel,
-                    forfattare  = EXCLUDED.forfattare,
-                    amnesord    = EXCLUDED.amnesord,
-                    abstrakt    = EXCLUDED.abstrakt,
-                    publicerad  = EXCLUDED.publicerad,
-                    sprak       = EXCLUDED.sprak,
-                    indexerad   = NOW()
+                    artikel_url    = EXCLUDED.artikel_url,
+                    doi            = EXCLUDED.doi,
+                    pdf_url        = EXCLUDED.pdf_url,
+                    titel          = EXCLUDED.titel,
+                    forfattare     = EXCLUDED.forfattare,
+                    amnesord       = EXCLUDED.amnesord,
+                    abstrakt       = EXCLUDED.abstrakt,
+                    publicerad     = EXCLUDED.publicerad,
+                    tidskrift_namn = EXCLUDED.tidskrift_namn,
+                    volym_nummer   = EXCLUDED.volym_nummer,
+                    issn           = EXCLUDED.issn,
+                    sprak          = EXCLUDED.sprak,
+                    licens         = EXCLUDED.licens,
+                    datestamp      = EXCLUDED.datestamp,
+                    indexerad      = NOW()
+                -- fts_tsv är en generated column — uppdateras automatiskt av PostgreSQL
             """, {**artikel, "forfattare": forfattare, "amnesord": amnesord})
     else:
         with _cursor(conn) as cur:
             cur.execute("""
                 INSERT INTO artikel
-                    (oai_id, spec, artikel_url, doi, titel, forfattare,
-                     amnesord, abstrakt, publicerad, sprak, indexerad)
+                    (oai_id, spec, artikel_url, doi, pdf_url,
+                     titel, forfattare, amnesord, abstrakt,
+                     publicerad, tidskrift_namn, volym_nummer, issn,
+                     sprak, licens, datestamp, indexerad)
                 VALUES
-                    (:oai_id, :spec, :artikel_url, :doi, :titel, :forfattare,
-                     :amnesord, :abstrakt, :publicerad, :sprak, datetime('now'))
+                    (:oai_id, :spec, :artikel_url, :doi, :pdf_url,
+                     :titel, :forfattare, :amnesord, :abstrakt,
+                     :publicerad, :tidskrift_namn, :volym_nummer, :issn,
+                     :sprak, :licens, :datestamp, datetime('now'))
                 ON CONFLICT (oai_id) DO UPDATE SET
-                    artikel_url = excluded.artikel_url,
-                    doi         = excluded.doi,
-                    titel       = excluded.titel,
-                    forfattare  = excluded.forfattare,
-                    amnesord    = excluded.amnesord,
-                    abstrakt    = excluded.abstrakt,
-                    publicerad  = excluded.publicerad,
-                    sprak       = excluded.sprak,
-                    indexerad   = datetime('now')
+                    artikel_url    = excluded.artikel_url,
+                    doi            = excluded.doi,
+                    pdf_url        = excluded.pdf_url,
+                    titel          = excluded.titel,
+                    forfattare     = excluded.forfattare,
+                    amnesord       = excluded.amnesord,
+                    abstrakt       = excluded.abstrakt,
+                    publicerad     = excluded.publicerad,
+                    tidskrift_namn = excluded.tidskrift_namn,
+                    volym_nummer   = excluded.volym_nummer,
+                    issn           = excluded.issn,
+                    sprak          = excluded.sprak,
+                    licens         = excluded.licens,
+                    datestamp      = excluded.datestamp,
+                    indexerad      = datetime('now')
             """, {**artikel, "forfattare": forfattare, "amnesord": amnesord})
     conn.commit()
 
@@ -636,7 +752,7 @@ def hamta_cachad_artikel(conn, oai_id: str) -> dict | None:
 # MCP-server och verktyg
 # ---------------------------------------------------------------------------
 
-server = Server("publicera-kb-v4")
+server = Server("publicera-kb")
 
 
 @server.list_tools()
@@ -652,7 +768,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "ddc_filter": {
+                    "ddk_filter": {
                         "type": "string",
                         "description": (
                             "Filtrera på DDK-avdelning, t.ex. '340' för juridik. "
@@ -733,9 +849,9 @@ async def list_tools() -> list[Tool]:
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    # Schema-init sker i main() vid uppstart; anrop öppnar bara en per-anrops-anslutning.
     conn = _hamta_db()
     try:
-        ensure_schema(conn)
         match name:
             case "publicera_lista_tidskrifter":
                 return await _lista_tidskrifter(conn, arguments)
@@ -755,7 +871,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
 
 async def _lista_tidskrifter(conn, args: dict) -> list[TextContent]:
-    ddc_filter = args.get("ddc_filter", "").strip() or None
+    ddk_filter = args.get("ddk_filter", "").strip() or None
     t_tab = _prefix("tidskrift")
     a_tab = _prefix("artikel")
 
@@ -763,9 +879,9 @@ async def _lista_tidskrifter(conn, args: dict) -> list[TextContent]:
         params: list = []
         where_delar: list[str] = []
 
-        if ddc_filter:
+        if ddk_filter:
             where_delar.append("t.ddk_avdelning = %s" if _ar_postgres() else "t.ddk_avdelning = ?")
-            params.append(ddc_filter)
+            params.append(ddk_filter)
         elif DDK_FILTER:
             if _ar_postgres():
                 where_delar.append("t.ddk_avdelning = ANY(%s)")
@@ -803,11 +919,11 @@ async def _lista_tidskrifter(conn, args: dict) -> list[TextContent]:
     return [TextContent(type="text", text="\n\n".join(rader))]
 
 
-async def _sok(conn, args: dict, extra_ddc: list[str] | None = None) -> list[TextContent]:
+async def _sok(conn, args: dict, extra_ddk: list[str] | None = None) -> list[TextContent]:
     sokterm = args.get("sokterm", "").strip()
-    _ddc_arg = args.get("ddk_avdelning", "").strip()
+    _ddk_arg = args.get("ddk_avdelning", "").strip()
     # Stöder kommaseparerade koder: "340,350" → ["340", "350"]
-    ddk_avdelning_lista = [k.strip() for k in _ddc_arg.split(",") if k.strip()] if _ddc_arg else []
+    ddk_avdelning_lista = [k.strip() for k in _ddk_arg.split(",") if k.strip()] if _ddk_arg else []
     max_resultat = min(int(args.get("max_resultat", 10)), 50)
 
     if not sokterm:
@@ -815,7 +931,7 @@ async def _sok(conn, args: dict, extra_ddc: list[str] | None = None) -> list[Tex
 
     a_tab = _prefix("artikel")
     t_tab = _prefix("tidskrift")
-    aktiv_ddk = extra_ddc or (ddk_avdelning_lista if ddk_avdelning_lista else DDK_FILTER or [])
+    aktiv_ddk = extra_ddk or (ddk_avdelning_lista if ddk_avdelning_lista else DDK_FILTER or [])
 
     # Query-expansion: flerspråkiga ekvivalenter via valfritt LLM-anrop
     extra_terms = expandera_fraga(sokterm)
@@ -844,32 +960,23 @@ async def _sok(conn, args: dict, extra_ddc: list[str] | None = None) -> list[Tex
                 ddk_sql = f"AND t.ddk_avdelning IN ({placeholders})"
                 ddk_params = list(aktiv_ddk)
 
-            # FTS med OR-logik över alla termer (original + expanderade):
-            # plainto_tsquery('simple', t1) || plainto_tsquery('simple', t2) || ...
-            # 'simple' är språkagnostisk — korpusen är blandspråkig
-            # (svenska: tgv, socvet m.fl.; engelska: ejels, sjpa, siplr m.fl.)
+            # FTS med OR-logik mot fts_tsv (generated column, GIN-index används).
+            # 'simple' — blandspråkig korpus (sv + en), ingen stemming.
+            # fts_tsv GENERATED ALWAYS AS to_tsvector('simple', titel||abstrakt||amnesord)
             fts_or_delar = " || ".join(["plainto_tsquery('simple', %s)"] * len(alla_termer))
-            rank_or_delar = " || ".join(["plainto_tsquery('simple', %s)"] * len(alla_termer))
-            fts_params = alla_termer  # för WHERE
-            rank_params = alla_termer  # för ts_rank
+            fts_params = alla_termer  # för WHERE och ts_rank
 
             cur.execute(f"""
                 SELECT a.oai_id, a.spec, a.titel, a.forfattare, a.publicerad,
                        a.abstrakt, a.doi, a.artikel_url, t.ddk_avdelning,
-                       ts_rank(
-                           to_tsvector('simple',
-                               coalesce(a.titel,'') || ' ' || coalesce(a.abstrakt,'')),
-                           {rank_or_delar}
-                       ) AS rank
+                       ts_rank(a.fts_tsv, {fts_or_delar}) AS rank
                 FROM {a_tab} a
                 JOIN {t_tab} t ON t.spec = a.spec
-                WHERE to_tsvector('simple',
-                          coalesce(a.titel,'') || ' ' || coalesce(a.abstrakt,''))
-                      @@ ({fts_or_delar})
+                WHERE a.fts_tsv @@ ({fts_or_delar})
                 {ddk_sql}
                 ORDER BY rank DESC
                 LIMIT %s
-            """, rank_params + fts_params + ddk_params + [max_resultat])
+            """, fts_params + fts_params + ddk_params + [max_resultat])
         else:
             # SQLite — enkel LIKE-sökning med OR över alla termer
             like_delar = " OR ".join(
@@ -1005,6 +1112,21 @@ async def _hamta_artikel(conn, args: dict) -> list[TextContent]:
 
 
 async def main() -> None:
+    # Schema-init vid uppstart — try/except så servern stannar kvar i Claude Desktop
+    # även om databasen är tillfälligt nere när Claude startar.
+    try:
+        conn = _hamta_db()
+        try:
+            ensure_schema(conn)
+        finally:
+            conn.close()
+    except Exception as exc:
+        log.warning(
+            "Schema-init misslyckades vid uppstart (databasen nere?): %s — "
+            "servern är kvar men verktygsanrop kan misslyckas tills databasen är tillgänglig.",
+            exc,
+        )
+
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,

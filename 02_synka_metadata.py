@@ -108,7 +108,14 @@ def db_anslut():
 
 
 def skapa_schema(kon) -> None:
-    """Skapar schema och tabeller om de inte redan finns."""
+    """
+    Skapar schema och tabeller om de inte redan finns.
+
+    Schemat är auktoritativt definierat i mcp_server.py:ensure_schema() —
+    denna funktion är en PG-specifik spegel för synk-skriptets behov.
+    Bas-schemat (v1.0.0) ska inte ändras efter publicering; nya kolumner
+    läggs till via migration-block längst ner.
+    """
     with kon:
         with kon.cursor() as cur:
             cur.execute("CREATE SCHEMA IF NOT EXISTS publicera_kb")
@@ -119,7 +126,7 @@ def skapa_schema(kon) -> None:
                     spec          TEXT PRIMARY KEY,
                     namn          TEXT NOT NULL,
                     ddk_avdelning TEXT,
-                    ddc_kod       TEXT,
+                    ddk_kod       TEXT,
                     sao_amnesord  TEXT[],
                     antal_poster  INTEGER,
                     synkad        BOOLEAN DEFAULT FALSE,
@@ -145,6 +152,9 @@ def skapa_schema(kon) -> None:
                     sprak           TEXT,
                     licens          TEXT,
                     datestamp       TIMESTAMPTZ,
+                    fulltext        TEXT,
+                    fulltext_format TEXT,
+                    fulltext_cachad TIMESTAMPTZ,
                     indexerad       TIMESTAMPTZ DEFAULT NOW()
                 )
             """)
@@ -160,15 +170,6 @@ def skapa_schema(kon) -> None:
                 CREATE INDEX IF NOT EXISTS artikel_sprak_idx
                     ON publicera_kb.artikel (sprak)
             """)
-            # FTS-index på titel + abstrakt
-            cur.execute("""
-                ALTER TABLE publicera_kb.artikel
-                    ADD COLUMN IF NOT EXISTS fts_tsv TSVECTOR
-            """)
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS artikel_fts_idx
-                    ON publicera_kb.artikel USING GIN (fts_tsv)
-            """)
 
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS publicera_kb.sync_status (
@@ -177,6 +178,37 @@ def skapa_schema(kon) -> None:
                     antal_poster    INTEGER DEFAULT 0,
                     status          TEXT DEFAULT 'klar'
                 )
+            """)
+
+    # -- migrationer after publication -----------------------------------------
+    # M1: Konvertera fts_tsv till generated column med 'simple' (v2.0.0, 2026-05-22)
+    #     Blandspråkig korpus (sv + en) — 'simple' ger korrekt matchning utan stemming.
+    #     Generated column underhålls automatiskt av PostgreSQL vid upsert.
+    with kon:
+        with kon.cursor() as cur:
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_schema = 'publicera_kb'
+                          AND table_name   = 'artikel'
+                          AND column_name  = 'fts_tsv'
+                          AND is_generated = 'ALWAYS'
+                    ) THEN
+                        ALTER TABLE publicera_kb.artikel DROP COLUMN IF EXISTS fts_tsv;
+                        ALTER TABLE publicera_kb.artikel
+                            ADD COLUMN fts_tsv TSVECTOR
+                            GENERATED ALWAYS AS (
+                                to_tsvector('simple'::regconfig,
+                                    coalesce(titel,'') || ' ' || coalesce(abstrakt,''))
+                            ) STORED;
+                    END IF;
+                END$$
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS artikel_fts_idx
+                    ON publicera_kb.artikel USING GIN (fts_tsv)
             """)
 
 
@@ -339,13 +371,14 @@ def tolka_poster(records: list) -> list[dict]:
             ""
         )
 
-        # Publiceringsdatum
+        # Publiceringsdatum — len(fmt) är formatlängden, inte datumstränglängden.
+        # Korrekt mappning: "%Y-%m-%d" → 10 tecken, "%Y-%m" → 7, "%Y" → 4.
         datum_str = next(iter(_text_lista(metadata, "date")), "")
         publicerad = None
         if datum_str:
-            for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
+            for fmt, lgt in (("%Y-%m-%d", 10), ("%Y-%m", 7), ("%Y", 4)):
                 try:
-                    dt = datetime.strptime(datum_str[:len(fmt)], fmt)
+                    dt = datetime.strptime(datum_str[:lgt], fmt)
                     publicerad = dt.date().isoformat()
                     break
                 except ValueError:
@@ -424,17 +457,8 @@ def upsert_poster(kon, poster: list[dict]) -> int:
                 poster,
                 page_size=100,
             )
-            # Uppdatera FTS-index
-            cur.execute("""
-                UPDATE publicera_kb.artikel
-                SET fts_tsv = to_tsvector(
-                    'swedish',
-                    COALESCE(titel, '') || ' ' ||
-                    COALESCE(abstrakt, '') || ' ' ||
-                    COALESCE(array_to_string(amnesord, ' '), '')
-                )
-                WHERE oai_id = ANY(%s)
-            """, ([p["oai_id"] for p in poster],))
+            # fts_tsv är en generated column (GENERATED ALWAYS AS) —
+            # PostgreSQL underhåller den automatiskt vid varje upsert.
 
     return len(poster)
 
@@ -520,7 +544,7 @@ def installera_schema(script_sokvag: str) -> None:
       cron     — fungerar på Linux och macOS
 
     Tidpunkt styrs av CRON_SCHEMA i .env (standard: 03:30 varje natt).
-    Python-sökväg styrs av PYTHON_SOKVÄG i .env (standard: ../../.venv/bin/python3
+    Python-sökväg styrs av PYTHON_SOKVAG i .env (standard: ../.venv/bin/python3
     relativt skriptmappen, dvs. ~/MCP-Servers/.venv/bin/python3).
     """
     schemalaggare = os.getenv("SCHEMALAGGARE", "launchd").lower()
@@ -529,7 +553,7 @@ def installera_schema(script_sokvag: str) -> None:
     skript_mapp   = Path(script_sokvag).parent.resolve()
 
     # Bygg absolut Python-sökväg — standard: den gemensamma venv i MCP-Servers
-    python_rel = os.getenv("PYTHON_SOKVÄG", "../../.venv/bin/python3")
+    python_rel = os.getenv("PYTHON_SOKVAG", "../.venv/bin/python3")
     if not os.path.isabs(python_rel):
         python_abs = str((skript_mapp / python_rel).resolve())
     else:
@@ -541,7 +565,7 @@ def installera_schema(script_sokvag: str) -> None:
             return
 
         plist_dir = Path.home() / "Library" / "LaunchAgents"
-        plist_fil = plist_dir / "se.riksdag-ai.publicera-kb-synk.plist"
+        plist_fil = plist_dir / "se.magnuskolsjo.mcp-publicera-kb-synk.plist"
         plist_dir.mkdir(parents=True, exist_ok=True)
 
         delar  = cron_schema.split()
@@ -553,7 +577,7 @@ def installera_schema(script_sokvag: str) -> None:
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>se.riksdag-ai.publicera-kb-synk</string>
+    <string>se.magnuskolsjo.mcp-publicera-kb-synk</string>
     <key>ProgramArguments</key>
     <array>
         <string>{python_abs}</string>
@@ -576,6 +600,12 @@ def installera_schema(script_sokvag: str) -> None:
         with open(plist_fil, "w") as fh:
             fh.write(plist)
 
+        # Avlasta eventuellt existerande jobb innan inlastning — idempotent.
+        # launchctl unload misslyckas tyst om jobbet inte är registrerat.
+        subprocess.run(
+            ["launchctl", "unload", str(plist_fil)],
+            capture_output=True,   # Ignorera fel (jobbet kan vara oregistrerat)
+        )
         subprocess.run(["launchctl", "load", str(plist_fil)], check=True)
         log.info("launchd-jobb installerat: %s", plist_fil)
         log.info("Kör dagligen kl. %s:%s. Loggar: ~/Library/Logs/", timme, minut)

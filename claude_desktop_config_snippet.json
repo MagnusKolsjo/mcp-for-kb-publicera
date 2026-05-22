@@ -1,16 +1,15 @@
 {
-  "_instruktion": "Lägg till 'publicera-kb'-blocket under 'mcpServers' i din claude_desktop_config.json. Filen finns på: ~/Library/Application Support/Claude/claude_desktop_config.json",
+  "_instruktion": "Lägg till 'publicera-kb'-blocket under 'mcpServers' i din claude_desktop_config.json. Filen finns på: ~/Library/Application Support/Claude/claude_desktop_config.json. Ersätt <...>-platshållarna med dina egna sökvägar.",
 
   "mcpServers": {
     "publicera-kb": {
-      "command": "/usr/bin/env",
+      "command": "/<absolut/sökväg/till>/MCP-Servers/.venv/bin/python3",
       "args": [
-        "python3",
-        "/Users/magnuskolsjo/0_Claude_Cowork/Riksdags- och rättsinformations AI/stream-11-publicera-kb/mcp_server.py"
+        "/<absolut/sökväg/till>/publicera-kb/mcp_server.py"
       ],
       "env": {
         "DATABASE_URL": "postgresql://mitt_db_anvandare@localhost:5432/riksdagstryck",
-        "PUBLICERA_DDC_FILTER": "020,210,300,310,320,330,340,350,360,370,380,390,430,900,910,920,930,940,950,960,970,980,990",
+        "PUBLICERA_DDK_FILTER": "020,210,300,310,320,330,340,350,360,370,380,390,430,900,910,920,930,940,950,960,970,980,990",
         "PUBLICERA_TIMEOUT": "30",
         "PUBLICERA_PAUS_SEKUNDER": "0.5"
       }

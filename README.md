@@ -10,15 +10,21 @@ Servern exponerar tre verktyg:
 - **publicera_sok** — fritextsökning i titlar och abstrakt för cachade artiklar
 - **publicera_hamta_artikel** — hämtar fullständig metadata och fulltext för en specifik artikel on demand (XML > HTML > EPUB > PDF)
 
+## Förutsättningar
+
+- Python 3.11 eller senare
+- PostgreSQL 14 eller senare (med pgvector om vektorsökning önskas) eller SQLite 3.35+
+- Nätverksåtkomst till `publicera.kb.se`
+
 ## Installation
 
 ```bash
 pip install -r requirements.txt
 cp config.example.env .env
 # Redigera .env med dina inställningar
-python 01_inventera_tidskrifter.py --spara-db
-python 02_synka_metadata.py
-python mcp_server.py
+python3 01_inventera_tidskrifter.py --spara-db
+python3 02_synka_metadata.py
+python3 mcp_server.py
 ```
 
 ## Konfiguration
@@ -103,3 +109,38 @@ DDK-avdelningarna beskrivs i tabellen nedan och i [Dewey decimalklassifikation �
 \* Avdelning tilldelad manuellt — tidskriften saknar DDK-klassning i Libris.
 
 DDK-avdelningarna följer Dewey decimalklassifikation (DDK 23), som Kungliga biblioteket tillämpar sedan 2011. En fullständig översikt finns i [Dewey decimalklassifikation — översikt (KB, 2023)](https://metadatabyran.kb.se/download/18.44613d3618ee55a56596c26/1716212730072/dewey_oversikt_23.pdf).
+
+## Databasbackend
+
+Servern stöder PostgreSQL och SQLite som symmetriska val — inget är "standard" eller "fallback". Välj backend via `DATABASE_URL` i `.env`:
+
+```env
+# PostgreSQL
+DATABASE_URL=postgresql://anvandare:losenord@localhost:5432/riksdagstryck
+
+# SQLite
+DATABASE_URL=sqlite:///publicera_kb_cache.db
+```
+
+PostgreSQL rekommenderas för produktionsanvändning eftersom det möjliggör FTS-sökning med GIN-index och `'simple'`-konfiguration för blandspråkig korpus (svenska + engelska). SQLite använder LIKE-sökning utan stemming.
+
+## Daglig synk
+
+Synk-skriptet hämtar nya och ändrade poster sedan senaste körning (inkrementell) och kan schemaläggas automatiskt:
+
+```bash
+# Kör manuellt
+python3 02_synka_metadata.py
+
+# Tvinga full omsynk av alla tidskrifter
+python3 02_synka_metadata.py --force
+
+# Installera dagligt schemalagt jobb (launchd på macOS, cron på Linux)
+python3 02_synka_metadata.py --installera-schema
+```
+
+Tidpunkt och schemaläggare styrs av `CRON_SCHEMA` och `SCHEMALAGGARE` i `.env`.
+
+## Licens
+
+GNU Affero General Public License v3.0 (AGPL-3.0). Se `LICENSE`.

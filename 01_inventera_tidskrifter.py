@@ -141,7 +141,13 @@ def hamta_antal_poster(spec: str, endpoint_bas: str) -> int | None:
 # --- Databaslagring ----------------------------------------------------------
 
 def spara_till_databas(tidskrifter: list[dict]) -> None:
-    """Sparar tidskriftslistan till PostgreSQL-schema publicera_kb."""
+    """
+    Sparar tidskriftslistan till PostgreSQL-schema publicera_kb.
+
+    Schemat är auktoritativt i mcp_server.py:ensure_schema() — här skapas
+    bara schema och tidskrift-tabellen om de saknas. ddk_avdelning och
+    ddk_kod populeras senare av 02_synka_metadata.py:upsert_tidskrifter().
+    """
     try:
         import psycopg2
     except ImportError:
@@ -158,34 +164,30 @@ def spara_till_databas(tidskrifter: list[dict]) -> None:
         with kon:
             with kon.cursor() as cur:
                 cur.execute("CREATE SCHEMA IF NOT EXISTS publicera_kb")
+                # Kanoniskt schema — måste matcha mcp_server.py:ensure_schema()
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS publicera_kb.tidskrift (
-                        spec            TEXT PRIMARY KEY,
-                        namn            TEXT NOT NULL,
-                        relevans        INTEGER DEFAULT 3,
-                        amnesomrade     TEXT,
-                        antal_poster    INTEGER,
-                        synkad          BOOLEAN DEFAULT FALSE,
-                        uppdaterad      TIMESTAMPTZ DEFAULT NOW()
+                        spec          TEXT PRIMARY KEY,
+                        namn          TEXT NOT NULL,
+                        ddk_avdelning TEXT,
+                        ddk_kod       TEXT,
+                        sao_amnesord  TEXT[],
+                        antal_poster  INTEGER,
+                        synkad        BOOLEAN DEFAULT FALSE,
+                        uppdaterad    TIMESTAMPTZ DEFAULT NOW()
                     )
                 """)
                 for t in tidskrifter:
-                    relevans, amne = RELEVANSREGISTER.get(t["spec"], (3, ""))
+                    # DDK-avdelning och DDK-kod populeras av 02_synka_metadata.py
                     cur.execute("""
                         INSERT INTO publicera_kb.tidskrift
-                            (spec, namn, relevans, amnesomrade, antal_poster)
-                        VALUES (%s, %s, %s, %s, %s)
+                            (spec, namn, antal_poster)
+                        VALUES (%s, %s, %s)
                         ON CONFLICT (spec) DO UPDATE SET
                             namn         = EXCLUDED.namn,
-                            relevans     = EXCLUDED.relevans,
-                            amnesomrade  = EXCLUDED.amnesomrade,
                             antal_poster = EXCLUDED.antal_poster,
                             uppdaterad   = NOW()
-                    """, (
-                        t["spec"], t["namn"],
-                        relevans, amne,
-                        t.get("antal_poster")
-                    ))
+                    """, (t["spec"], t["namn"], t.get("antal_poster")))
         kon.close()
         print(f"  Sparade {len(tidskrifter)} tidskrifter till publicera_kb.tidskrift")
     except Exception as fel:
