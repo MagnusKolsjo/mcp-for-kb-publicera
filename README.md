@@ -141,6 +141,23 @@ python3 02_synka_metadata.py --installera-schema
 
 Tidpunkt och schemaläggare styrs av `CRON_SCHEMA` och `SCHEMALAGGARE` i `.env`.
 
+
+## Svarsstorlek och trunkering
+
+MCP-protokollet har en övre storleksgräns per svar. Artiklarna är sällan mycket stora — den längsta i cachen är 82 892 tecken — men fulltexten kapades tidigare vid 8 000 tecken utan något sätt att läsa resten.
+`publicera_hamta_artikel` tar därför två parametrar:
+
+| Parameter | Innebörd |
+|---|---|
+| `max_tecken` | Teckentak för texten. Standard 8 000 tecken; `0` ger hela texten som ett uttryckligt val. |
+| `fran_tecken` | Börja vid denna teckenposition — för att läsa vidare där ett kapat svar slutade. |
+
+Ett kapat svar säger alltid ifrån med en rad som anger vilket teckenintervall som visas och det färdiga anropet för att fortsätta. Kapningen sker på ordgräns, aldrig mitt i
+ett ord.
+
+**Vid ordagranna citat:** citera aldrig ur ett svar som är markerat som kapat.
+Läs vidare med `fran_tecken` tills hela passagen är hämtad.
+
 ## Licens
 
 GNU Affero General Public License v3.0 (AGPL-3.0). Se `LICENSE`.

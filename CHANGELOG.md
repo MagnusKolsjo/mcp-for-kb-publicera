@@ -5,6 +5,45 @@ Formatet följer [Keep a Changelog](https://keepachangelog.com/sv/1.0.0/).
 
 ---
 
+## [2.1.0] — 2026-08-10
+
+### Tillagt
+
+- **`max_tecken` och `fran_tecken` i `publicera_hamta_artikel`** (standard 8 000
+  tecken, `0` ger hela artikeln).
+
+### Ändrat
+
+- **Trunkeringen visar nu vägen vidare.** Fulltexten kapades tidigare vid 8 000 tecken
+  med markeringen `[Trunkerad — N tecken totalt]`. Markeringen var korrekt men det fanns
+  inget sätt att läsa resten — artikeln bortom teckengränsen var oåtkomlig. Markeringen
+  anger nu vilket intervall som visas och det färdiga anropet för att fortsätta:
+  `[Visar tecken 8 001–16 000 av 82 892. Läs vidare: publicera_hamta_artikel(oai_id="…", fran_tecken=16000)]`.
+  Kapningen sker dessutom på ordgräns i stället för mitt i ett ord.
+
+### Bakgrund
+
+Genomför projektets svarskontrakt (`00-las-forst.md` → "Svarskontraktet — storlek,
+trunkering, adressering och sökning"). Additiva parametrar och fält; inga brytande
+ändringar och inga schemaändringar. Cachen och databasen lagrar fortfarande hela
+texten — trunkeringen gäller bara svaret till anroparen, så sökning och indexering
+påverkas inte.
+
+---
+
+## [2.0.1] — 2026-05-22
+
+### Åtgärdat
+
+- **Migration M1** — `array_to_string(amnesord, ' ')` orsakade `generation expression is not immutable`
+  eftersom `array_to_string(anyarray, text)` är STABLE (ej IMMUTABLE) i PostgreSQL.
+  Lösning: `amnesord` utesluts ur generated column-uttrycket; FTS indexerar `titel || abstrakt`.
+  `'simple'::regconfig`-casten behålls (krävs för att `to_tsvector` ska godkännas som immutable).
+
+---
+
+---
+
 ## [2.0.0] — 2026-05-22
 
 Första publika version. Samlar alla ändringar sedan intern prototyp.
@@ -69,13 +108,3 @@ python3 02_synka_metadata.py --force
 
 ---
 
-## [2.0.1] — 2026-05-22
-
-### Åtgärdat
-
-- **Migration M1** — `array_to_string(amnesord, ' ')` orsakade `generation expression is not immutable`
-  eftersom `array_to_string(anyarray, text)` är STABLE (ej IMMUTABLE) i PostgreSQL.
-  Lösning: `amnesord` utesluts ur generated column-uttrycket; FTS indexerar `titel || abstrakt`.
-  `'simple'::regconfig`-casten behålls (krävs för att `to_tsvector` ska godkännas som immutable).
-
----

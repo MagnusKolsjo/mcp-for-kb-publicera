@@ -840,6 +840,20 @@ async def list_tools() -> list[Tool]:
                             "Krävs om artikeln inte finns i cachen."
                         ),
                     },
+                    "max_tecken": {
+                        "type": "integer",
+                        "description": (
+                            "Teckentak för fulltexten (standard 8 000, 0 = hela artikeln). "
+                            "Höj taket eller använd fran_tecken för att läsa vidare i "
+                            "längre artiklar."
+                        ),
+                        "default": 8000,
+                    },
+                    "fran_tecken": {
+                        "type": "integer",
+                        "description": "Börja fulltexten vid denna teckenposition — för att läsa vidare.",
+                        "default": 0,
+                    },
                 },
                 "required": ["oai_id"],
             },
@@ -1036,6 +1050,8 @@ async def _sok(conn, args: dict, extra_ddk: list[str] | None = None) -> list[Tex
 async def _hamta_artikel(conn, args: dict) -> list[TextContent]:
     oai_id = args.get("oai_id", "").strip()
     spec = args.get("spec", "").strip()
+    max_tecken  = int(args.get("max_tecken", 8000) or 0)
+    fran_tecken = int(args.get("fran_tecken", 0) or 0)
 
     if not oai_id:
         return [TextContent(type="text", text="Ange ett oai_id.")]
@@ -1095,9 +1111,22 @@ async def _hamta_artikel(conn, args: dict) -> list[TextContent]:
         delar.append(f"\n### Abstrakt\n{artikel['abstrakt']}")
 
     if fulltext:
-        visning = fulltext[:8_000]
-        if len(fulltext) > 8_000:
-            visning += f"\n\n*[Trunkerad — {len(fulltext):,} tecken totalt]*"
+        # Trunkeringen markeras och pekar ut vägen vidare — tidigare angavs bara
+        # att texten var kapad, utan något sätt att nå resten.
+        if max_tecken and max_tecken > 0 and len(fulltext) > fran_tecken + max_tecken:
+            visning = fulltext[fran_tecken:fran_tecken + max_tecken]
+            brytpunkt = max(visning.rfind(" "), visning.rfind("\n"))
+            if brytpunkt > max_tecken * 0.6:
+                visning = visning[:brytpunkt]
+            visning = visning.rstrip()
+            nasta = fran_tecken + len(visning)
+            visning += (
+                f"\n\n*[Visar tecken {fran_tecken + 1:,}–{nasta:,} av {len(fulltext):,}. "
+                f"Läs vidare: publicera_hamta_artikel(oai_id=\"{oai_id}\", "
+                f"fran_tecken={nasta})]*"
+            )
+        else:
+            visning = fulltext[fran_tecken:]
         delar.append(f"\n### Fulltext\n{visning}")
     else:
         delar.append("\n*Fulltext kunde inte hämtas för denna artikel.*")
